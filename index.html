@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BatSense — Détecteur de Chauves-Souris</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #08070f;
+    --surface: #100e1e;
+    --card: #16132a;
+    --border: #2a2545;
+    --accent: #7c3aed;
+    --accent2: #06b6d4;
+    --accent3: #f59e0b;
+    --text: #e2deff;
+    --muted: #6b648a;
+    --danger: #ef4444;
+    --success: #22c55e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated starfield background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 20% 30%, rgba(124,58,237,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 80% 10%, rgba(6,182,212,0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 50% 80%, rgba(124,58,237,0.2) 0%, transparent 100%),
+      radial-gradient(2px 2px at 70% 60%, rgba(6,182,212,0.2) 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .noise {
+    position: fixed;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-top: 1rem;
+  }
+
+  .logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .bat-icon {
+    font-size: 2.5rem;
+    animation: flutter 3s ease-in-out infinite;
+    filter: drop-shadow(0 0 12px rgba(124,58,237,0.8));
+  }
+
+  @keyframes flutter {
+    0%, 100% { transform: scaleX(1) rotate(-3deg); }
+    25% { transform: scaleX(0.85) rotate(3deg); }
+    50% { transform: scaleX(1) rotate(-2deg); }
+    75% { transform: scaleX(0.9) rotate(2deg); }
+  }
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--text) 30%, var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .tagline {
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 0.5rem;
+  }
+
+  /* Main card layout */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  @media (max-width: 600px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.5;
+  }
+
+  .card-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  /* Visualizer */
+  .visualizer-card {
+    grid-column: 1 / -1;
+  }
+
+  #visualizer {
+    width: 100%;
+    height: 120px;
+    border-radius: 8px;
+    background: var(--surface);
+    display: block;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .record-btn {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    position: relative;
+    box-shadow: 0 0 0 0 rgba(124,58,237,0.5);
+  }
+
+  .record-btn:hover {
+    background: rgba(124,58,237,0.1);
+    box-shadow: 0 0 20px rgba(124,58,237,0.3);
+  }
+
+  .record-btn.recording {
+    border-color: var(--danger);
+    animation: pulse 1.2s infinite;
+    box-shadow: 0 0 0 0 rgba(239,68,68,0.5);
+  }
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+    70% { box-shadow: 0 0 0 16px rgba(239,68,68,0); }
+    100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+  }
+
+  .record-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    transition: all 0.3s;
+  }
+
+  .record-btn.recording .record-icon {
+    border-radius: 4px;
+    width: 22px;
+    height: 22px;
+    background: var(--danger);
+  }
+
+  .btn-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .timer {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.4rem;
+    color: var(--accent2);
+    letter-spacing: 0.1em;
+  }
+
+  /* Frequency stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .stat {
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 0.75rem;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.1rem;
+    color: var(--accent2);
+    font-weight: 700;
+  }
+
+  .stat-name {
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* Analyze button */
+  .analyze-btn {
+    width: 100%;
+    padding: 1rem;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(135deg, var(--accent), #5b21b6);
+    color: white;
+    font-family: 'Syne', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    letter-spacing: 0.02em;
+  }
+
+  .analyze-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(124,58,237,0.4);
+  }
+
+  .analyze-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Results */
+  .results-card {
+    grid-column: 1 / -1;
+  }
+
+  .result-content {
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .placeholder {
+    text-align: center;
+    color: var(--muted);
+  }
+
+  .placeholder-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 0.5rem;
+    opacity: 0.4;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+
+  .placeholder p {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+  }
+
+  .loading-dots {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+  }
+
+  .loading-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: dot 1.4s ease-in-out infinite;
+  }
+
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Species result */
+  .species-result {
+    width: 100%;
+  }
+
+  .species-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .confidence-badge {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 20px;
+    padding: 0.25rem 0.75rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+
+  .species-name {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.2;
+  }
+
+  .species-latin {
+    font-style: italic;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-top: 0.2rem;
+  }
+
+  .species-description {
+    font-size: 0.9rem;
+    color: #a09cc0;
+    line-height: 1.7;
+    margin-bottom: 1rem;
+  }
+
+  .species-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .tag {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.25rem 0.75rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--accent2);
+    letter-spacing: 0.05em;
+  }
+
+  /* Sonar ping animation on recording */
+  .sonar {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .sonar-ring {
+    position: absolute;
+    border: 1px solid var(--accent2);
+    border-radius: 50%;
+    animation: sonar-expand 2s ease-out infinite;
+    opacity: 0;
+  }
+
+  .sonar-ring:nth-child(1) { animation-delay: 0s; }
+  .sonar-ring:nth-child(2) { animation-delay: 0.6s; }
+  .sonar-ring:nth-child(3) { animation-delay: 1.2s; }
+
+  @keyframes sonar-expand {
+    0% { width: 0; height: 0; opacity: 0.6; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+    100% { width: 200px; height: 200px; opacity: 0; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+  }
+
+  /* History */
+  .history-section { margin-top: 1.5rem; }
+
+  .history-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .history-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .history-name { font-size: 0.9rem; font-weight: 600; }
+  .history-time { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); }
+
+  /* Info tooltip */
+  .info-note {
+    background: rgba(6,182,212,0.08);
+    border: 1px solid rgba(6,182,212,0.2);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    font-size: 0.8rem;
+    color: var(--accent2);
+    margin-bottom: 1.5rem;
+    font-family: 'Space Mono', monospace;
+    line-height: 1.6;
+  }
+
+  /* Permission banner */
+  .perm-banner {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.35);
+    border-radius: 14px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: none;
+  }
+
+  .perm-banner.visible { display: block; }
+
+  .perm-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fca5a5;
+    margin-bottom: 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .perm-steps {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    color: #f87171;
+    line-height: 2;
+    margin-bottom: 1rem;
+  }
+
+  .perm-steps b { color: #fca5a5; }
+
+  .perm-steps code {
+    background: rgba(239,68,68,0.15);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.68rem;
+    user-select: all;
+  }
+
+  .perm-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .perm-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: none;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .perm-btn-primary {
+    background: var(--danger);
+    color: white;
+  }
+
+  .perm-btn-primary:hover { background: #dc2626; transform: translateY(-1px); }
+
+  .perm-btn-secondary {
+    background: transparent;
+    border: 1px solid rgba(239,68,68,0.4);
+    color: #f87171;
+  }
+
+  .perm-btn-secondary:hover { background: rgba(239,68,68,0.1); }
+
+  .perm-divider {
+    border: none;
+    border-top: 1px solid rgba(239,68,68,0.2);
+    margin: 1rem 0;
+  }
+
+  .perm-flag-section { margin-top: 0.25rem; }
+
+  .perm-flag-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    color: #f87171;
+    margin-bottom: 0.4rem;
+    opacity: 0.8;
+  }
+
+  .freq-bar-container {
+    margin-top: 0.75rem;
+  }
+
+  .freq-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .freq-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    width: 60px;
+    text-align: right;
+  }
+
+  .freq-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--surface);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .freq-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 3px;
+    transition: width 0.1s;
+    width: 0%;
+  }
+
+  .reset-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-left: auto;
+    display: block;
+    margin-top: 0.75rem;
+  }
+
+  .reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+
+<div class="container">
+  <header>
+    <div class="logo-row">
+      <span class="bat-icon">🦇</span>
+      <h1>BatSense</h1>
+    </div>
+    <p class="tagline">Détecteur d'espèces par écholocation · Powered by Claude AI</p>
+  </header>
+
+  <div class="info-note">
+    ⚠️ Les chauves-souris émettent des ultrasons (20–120 kHz) inaudibles pour l'humain. Cette app analyse les sons audibles basses fréquences et les harmoniques captés par votre micro, et compare les empreintes fréquentielles à une base de données locale de 20 espèces européennes — aucune connexion internet requise.
+  </div>
+
+  <!-- Permission error banner -->
+  <div class="perm-banner" id="permBanner">
+    <div class="perm-title">🎙️ Accès au microphone impossible</div>
+    <div class="perm-steps">
+      La page est ouverte via <code>content://</code> — Chrome Android bloque le micro sur ce schéma, même avec les permissions accordées. Il faut la servir via un <b>serveur HTTP local</b>. Voici 3 solutions :
+    </div>
+
+    <hr class="perm-divider">
+
+    <div class="perm-steps">
+      <b>⭐ Option 1 — Netlify Drop (le plus simple, aucune install) :</b><br>
+      1. Va sur <a href="https://app.netlify.com/drop" target="_blank" style="color:#fca5a5;">app.netlify.com/drop</a><br>
+      2. Glisse-dépose ce fichier HTML sur la page<br>
+      3. Netlify génère une URL <b>HTTPS</b> en quelques secondes<br>
+      4. Ouvre cette URL dans Chrome → le micro fonctionnera
+    </div>
+
+    <hr class="perm-divider">
+
+    <div class="perm-steps">
+      <b>📱 Option 2 — Serveur HTTP local avec une app Android :</b><br>
+      1. Installe <b>«&nbsp;Simple HTTP Server&nbsp;»</b> depuis le Play Store<br>
+      2. Pointe-la vers le dossier contenant ce fichier HTML<br>
+      3. Lance le serveur (port 8080 par défaut)<br>
+      4. Ouvre <code>http://localhost:8080/bat-detector.html</code> dans Chrome
+    </div>
+
+    <hr class="perm-divider">
+
+    <div class="perm-steps">
+      <b>🖥️ Option 3 — Termux (gratuit, pour les curieux) :</b><br>
+      1. Installe <b>Termux</b> depuis F-Droid ou le Play Store<br>
+      2. Dans Termux, tape :<br>
+      <code style="display:block; margin:0.4rem 0;">pkg install python -y</code>
+      <code style="display:block; margin:0.4rem 0;">cd /sdcard &amp;&amp; python -m http.server 8080</code>
+      3. Ouvre <code>http://localhost:8080/bat-detector.html</code> dans Chrome
+    </div>
+
+    <hr class="perm-divider">
+
+    <div class="perm-actions">
+      <button class="perm-btn perm-btn-primary" onclick="retryMic()">🔄 Réessayer</button>
+      <button class="perm-btn perm-btn-secondary" onclick="document.getElementById('permBanner').classList.remove('visible')">✕ Fermer</button>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <!-- Visualizer -->
+    <div class="card visualizer-card">
+      <div class="card-label">Spectre sonore en temps réel</div>
+      <canvas id="visualizer"></canvas>
+    </div>
+
+    <!-- Controls -->
+    <div class="card">
+      <div class="card-label">Enregistrement</div>
+      <div class="controls">
+        <div style="position:relative; width:80px; height:80px;">
+          <div class="sonar" id="sonarRings" style="display:none;">
+            <div class="sonar-ring"></div>
+            <div class="sonar-ring"></div>
+            <div class="sonar-ring"></div>
+          </div>
+          <button class="record-btn" id="recordBtn" onclick="toggleRecording()">
+            <div class="record-icon"></div>
+          </button>
+        </div>
+        <span class="btn-label" id="btnLabel">Démarrer l'écoute</span>
+        <span class="timer" id="timer">00:00</span>
+      </div>
+    </div>
+
+    <!-- Frequency stats -->
+    <div class="card">
+      <div class="card-label">Analyse fréquentielle</div>
+      <div class="stats-grid">
+        <div class="stat">
+          <div class="stat-value" id="statPeak">— Hz</div>
+          <div class="stat-name">Fréquence pic</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="statAvg">— dB</div>
+          <div class="stat-name">Niveau moyen</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="statPulses">0</div>
+          <div class="stat-name">Impulsions</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="statDuration">0s</div>
+          <div class="stat-name">Durée captée</div>
+        </div>
+      </div>
+
+      <div class="freq-bar-container">
+        <div class="freq-bar-row">
+          <span class="freq-label">20–2k</span>
+          <div class="freq-bar-track"><div class="freq-bar-fill" id="bar1"></div></div>
+        </div>
+        <div class="freq-bar-row">
+          <span class="freq-label">2k–8k</span>
+          <div class="freq-bar-track"><div class="freq-bar-fill" id="bar2"></div></div>
+        </div>
+        <div class="freq-bar-row">
+          <span class="freq-label">8k–16k</span>
+          <div class="freq-bar-track"><div class="freq-bar-fill" id="bar3"></div></div>
+        </div>
+        <div class="freq-bar-row">
+          <span class="freq-label">16k–22k</span>
+          <div class="freq-bar-track"><div class="freq-bar-fill" id="bar4"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analyze button + results -->
+    <div class="card results-card">
+      <div class="card-label">Identification par IA</div>
+      <button class="analyze-btn" id="analyzeBtn" onclick="analyzeRecording()" disabled>
+        🔍 Identifier l'espèce
+      </button>
+      <div class="result-content" id="resultContent">
+        <div class="placeholder">
+          <span class="placeholder-icon">🦇</span>
+          <p>Enregistrez un son puis lancez<br>l'identification</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="history-section" id="historySection" style="display:none;">
+    <div class="history-title">Identifications récentes</div>
+    <div class="history-list" id="historyList"></div>
+    <button class="reset-btn" onclick="clearHistory()">Effacer l'historique</button>
+  </div>
+</div>
+
+<script>
+let audioContext, analyser, source, mediaStream;
+let isRecording = false;
+let timerInterval, animFrame;
+let seconds = 0;
+let pulseCount = 0;
+let lastPulse = false;
+let peakFreq = 0;
+let avgDb = -100;
+let dbSamples = [];
+let freakData = { low: 0, mid: 0, high: 0, ultraHigh: 0 };
+let hasRecorded = false;
+let history = [];
+
+const canvas = document.getElementById('visualizer');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// Draw idle animation
+function drawIdle() {
+  resizeCanvas();
+  ctx.fillStyle = '#0d0b1a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const now = Date.now() / 1000;
+  for (let i = 0; i < canvas.width; i += 4) {
+    const y = canvas.height / 2 + Math.sin(i * 0.05 + now * 2) * 8 + Math.sin(i * 0.02 + now) * 4;
+    ctx.fillStyle = `rgba(124,58,237,0.15)`;
+    ctx.fillRect(i, y, 2, 2);
+  }
+  if (!isRecording) animFrame = requestAnimationFrame(drawIdle);
+}
+drawIdle();
+
+async function toggleRecording() {
+  if (!isRecording) {
+    await startRecording();
+  } else {
+    stopRecording();
+  }
+}
+
+async function startRecording() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 4096;
+    analyser.smoothingTimeConstant = 0.6;
+    source = audioContext.createMediaStreamSource(mediaStream);
+    source.connect(analyser);
+
+    isRecording = true;
+    pulseCount = 0;
+    dbSamples = [];
+    peakFreq = 0;
+
+    document.getElementById('recordBtn').classList.add('recording');
+    document.getElementById('btnLabel').textContent = 'Écoute en cours…';
+    document.getElementById('sonarRings').style.display = 'block';
+    document.getElementById('analyzeBtn').disabled = true;
+
+    seconds = 0;
+    timerInterval = setInterval(() => {
+      seconds++;
+      const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+      const s = String(seconds % 60).padStart(2, '0');
+      document.getElementById('timer').textContent = `${m}:${s}`;
+      document.getElementById('statDuration').textContent = `${seconds}s`;
+    }, 1000);
+
+    drawWaveform();
+  } catch (e) {
+    isRecording = false;
+    document.getElementById('recordBtn').classList.remove('recording');
+    document.getElementById('btnLabel').textContent = "Démarrer l'écoute";
+    document.getElementById('sonarRings').style.display = 'none';
+    clearInterval(timerInterval);
+    document.getElementById('permBanner').classList.add('visible');
+    document.getElementById('permBanner').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function stopRecording() {
+  isRecording = false;
+  cancelAnimationFrame(animFrame);
+  clearInterval(timerInterval);
+
+  if (source) source.disconnect();
+  if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+  if (audioContext) audioContext.close();
+
+  document.getElementById('recordBtn').classList.remove('recording');
+  document.getElementById('btnLabel').textContent = 'Démarrer l\'écoute';
+  document.getElementById('sonarRings').style.display = 'none';
+
+  hasRecorded = seconds > 1;
+  if (hasRecorded) {
+    document.getElementById('analyzeBtn').disabled = false;
+  }
+
+  drawIdle();
+}
+
+function drawWaveform() {
+  if (!isRecording) return;
+  animFrame = requestAnimationFrame(drawWaveform);
+
+  const bufLen = analyser.frequencyBinCount;
+  const data = new Uint8Array(bufLen);
+  analyser.getByteFrequencyData(data);
+
+  const sampleRate = audioContext.sampleRate;
+  const binHz = sampleRate / (analyser.fftSize);
+
+  // Find peak frequency
+  let maxVal = 0, maxIdx = 0;
+  for (let i = 1; i < bufLen; i++) {
+    if (data[i] > maxVal) { maxVal = data[i]; maxIdx = i; }
+  }
+  if (maxVal > 30) {
+    peakFreq = Math.round(maxIdx * binHz);
+    document.getElementById('statPeak').textContent = peakFreq > 1000 ? `${(peakFreq/1000).toFixed(1)}kHz` : `${peakFreq}Hz`;
+  }
+
+  // Frequency bands
+  let low = 0, mid = 0, high = 0, ultraHigh = 0;
+  let lowCount = 0, midCount = 0, highCount = 0, uhCount = 0;
+
+  for (let i = 0; i < bufLen; i++) {
+    const hz = i * binHz;
+    if (hz < 2000) { low += data[i]; lowCount++; }
+    else if (hz < 8000) { mid += data[i]; midCount++; }
+    else if (hz < 16000) { high += data[i]; highCount++; }
+    else { ultraHigh += data[i]; uhCount++; }
+  }
+
+  if (lowCount) freakData.low = low / lowCount;
+  if (midCount) freakData.mid = mid / midCount;
+  if (highCount) freakData.high = high / highCount;
+  if (uhCount) freakData.ultraHigh = ultraHigh / uhCount;
+
+  // Update bars
+  const maxB = 255;
+  document.getElementById('bar1').style.width = `${(freakData.low/maxB*100).toFixed(1)}%`;
+  document.getElementById('bar2').style.width = `${(freakData.mid/maxB*100).toFixed(1)}%`;
+  document.getElementById('bar3').style.width = `${(freakData.high/maxB*100).toFixed(1)}%`;
+  document.getElementById('bar4').style.width = `${(freakData.ultraHigh/maxB*100).toFixed(1)}%`;
+
+  // Average dB
+  let sum = 0;
+  data.forEach(v => sum += v);
+  const avgRaw = sum / bufLen;
+  const db = Math.round(20 * Math.log10(avgRaw / 255 + 0.001));
+  dbSamples.push(db);
+  avgDb = Math.round(dbSamples.reduce((a,b) => a+b, 0) / dbSamples.length);
+  document.getElementById('statAvg').textContent = `${avgDb} dB`;
+
+  // Pulse detection (energy spike)
+  const isPulse = avgRaw > 20;
+  if (isPulse && !lastPulse) { pulseCount++; document.getElementById('statPulses').textContent = pulseCount; }
+  lastPulse = isPulse;
+
+  // Draw spectrum
+  resizeCanvas();
+  ctx.fillStyle = '#0a0817';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const barW = Math.ceil(canvas.width / (bufLen / 4));
+  for (let i = 0; i < bufLen / 4; i++) {
+    const v = data[i] / 255;
+    const barH = v * canvas.height;
+    const hue = 260 + v * 80;
+    const sat = 60 + v * 40;
+    ctx.fillStyle = `hsla(${hue}, ${sat}%, ${40 + v*40}%, ${0.4 + v*0.6})`;
+    ctx.fillRect(i * barW, canvas.height - barH, barW - 1, barH);
+  }
+
+  // Waveform overlay
+  const waveData = new Uint8Array(bufLen);
+  analyser.getByteTimeDomainData(waveData);
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(6,182,212,0.5)';
+  ctx.lineWidth = 1.5;
+  const sliceW = canvas.width / bufLen;
+  let x = 0;
+  for (let i = 0; i < bufLen; i++) {
+    const v = waveData[i] / 128.0;
+    const y = (v * canvas.height) / 2;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    x += sliceW;
+  }
+  ctx.stroke();
+}
+
+// ─── BASE DE DONNÉES LOCALE (20 espèces européennes) ───────────────────────
+// Empreintes basées sur les harmoniques basses captables par micro standard.
+// Chaque espèce a : low(20Hz-2kHz), mid(2k-8k), high(8k-16k), ultraHigh(16k-22k)
+// pulsesPerMin : impulsions typiques/min, peakHz : fréquence fondamentale audible
+const BAT_DB = [
+  {
+    species: "Pipistrelle commune", latin: "Pipistrellus pipistrellus",
+    description: "La chauve-souris la plus répandue en Europe. Elle chasse en milieu urbain et péri-urbain, souvent autour des lampadaires. Ses cris sont rapides et très réguliers.",
+    characteristics: ["Très commune en ville", "Vol rapide et agile", "Cris répétitifs"],
+    habitat: "Urbain et péri-urbain", frequency_range: "40–50 kHz (fond. ~3–5 kHz audible)",
+    conservation: "Préoccupation mineure (LC)",
+    // profil : forte énergie mid/high, impulsions très fréquentes
+    profile: { low: 30, mid: 90, high: 120, ultraHigh: 80, pulsesPerMin: 180 }
+  },
+  {
+    species: "Pipistrelle de Nathusius", latin: "Pipistrellus nathusii",
+    description: "Espèce migratrice parcourant des milliers de kilomètres. Elle chasse près de l'eau et en forêt. Ses cris sont légèrement plus graves que la pipistrelle commune.",
+    characteristics: ["Migratrice longue distance", "Chasse près de l'eau", "Cris plus graves"],
+    habitat: "Forêts et zones humides", frequency_range: "35–45 kHz (fond. ~2–4 kHz audible)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 35, mid: 100, high: 100, ultraHigh: 60, pulsesPerMin: 150 }
+  },
+  {
+    species: "Sérotine commune", latin: "Eptesicus serotinus",
+    description: "Grande chauve-souris des milieux agricoles et des villages. Elle vole bas et lentement, émettant des cris puissants à basse fréquence. Souvent observée au crépuscule.",
+    characteristics: ["Grande taille", "Vol lent et bas", "Cris basse fréquence"],
+    habitat: "Villages et zones agricoles", frequency_range: "25–30 kHz (fond. ~1–3 kHz audible)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 80, mid: 110, high: 60, ultraHigh: 20, pulsesPerMin: 60 }
+  },
+  {
+    species: "Grand Murin", latin: "Myotis myotis",
+    description: "Une des plus grandes chauves-souris d'Europe. Elle chasse à ras du sol dans les forêts de feuillus, débusquant ses proies au bruit. Ses cris sont courts et larges bande.",
+    characteristics: ["Très grande envergure", "Chasse au sol", "Colonies importantes"],
+    habitat: "Forêts de feuillus et grottes", frequency_range: "25–60 kHz (fond. ~1–4 kHz audible)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 60, mid: 80, high: 90, ultraHigh: 50, pulsesPerMin: 40 }
+  },
+  {
+    species: "Murin de Daubenton", latin: "Myotis daubentonii",
+    description: "La chauve-souris des rivières et des lacs. Elle rase la surface de l'eau pour capturer insectes et parfois petits poissons. Vol très régulier et bas.",
+    characteristics: ["Chasse sur l'eau", "Vol ras et régulier", "Pieds et oreilles larges"],
+    habitat: "Rivières, lacs et canaux", frequency_range: "35–80 kHz (fond. ~2–5 kHz audible)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 25, mid: 70, high: 130, ultraHigh: 90, pulsesPerMin: 120 }
+  },
+  {
+    species: "Noctule commune", latin: "Nyctalus noctula",
+    description: "Grande chauve-souris forestière aux cris très puissants et graves. Elle chasse haut dans le ciel, souvent avant même le coucher du soleil. Migratrice partielle.",
+    characteristics: ["Vol haut en altitude", "Cris très puissants", "Sort avant le coucher du soleil"],
+    habitat: "Forêts et parcs arborés", frequency_range: "20–25 kHz (fond. ~1–2 kHz audible)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 110, mid: 90, high: 30, ultraHigh: 10, pulsesPerMin: 50 }
+  },
+  {
+    species: "Noctule de Leisler", latin: "Nyctalus leisleri",
+    description: "Plus petite que la noctule commune, elle occupe des habitats similaires. Elle émet des cris caractéristiques alternant deux fréquences. Migratrice.",
+    characteristics: ["Deux fréquences alternées", "Vol rapide en hauteur", "Migratrice"],
+    habitat: "Forêts et bocages", frequency_range: "23–30 kHz (fond. ~2–3 kHz audible)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 90, mid: 100, high: 40, ultraHigh: 15, pulsesPerMin: 70 }
+  },
+  {
+    species: "Oreillard roux", latin: "Plecotus auritus",
+    description: "Reconnaissable à ses immenses oreilles. Elle chasse à faible allure dans les forêts, glânant des proies sur la végétation. Ses cris sont très discrets car très courts.",
+    characteristics: ["Très grandes oreilles", "Cris très discrets", "Chasse par glanage"],
+    habitat: "Forêts, jardins et vieux bâtiments", frequency_range: "30–50 kHz (fond. très faible audible)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 10, mid: 20, high: 50, ultraHigh: 40, pulsesPerMin: 30 }
+  },
+  {
+    species: "Oreillard gris", latin: "Plecotus austriacus",
+    description: "Très similaire à l'oreillard roux, elle préfère les milieux plus ouverts et chauds. Souvent associée aux villages méditerranéens. Cris également très discrets.",
+    characteristics: ["Milieux ouverts et chauds", "Grandes oreilles grises", "Vol lent et papillonnant"],
+    habitat: "Villages et zones méditerranéennes", frequency_range: "30–45 kHz (fond. très faible audible)",
+    conservation: "Vulnérable (VU) en France",
+    profile: { low: 8, mid: 18, high: 45, ultraHigh: 35, pulsesPerMin: 25 }
+  },
+  {
+    species: "Rhinolophe fer à cheval", latin: "Rhinolophus ferrumequinum",
+    description: "Reconnaissable à son appendice nasal en fer à cheval. Elle émet ses cris par le nez en continu (FM constant). Indicatrice de la qualité des habitats bocagers.",
+    characteristics: ["Cris par le nez", "Appendice nasal caractéristique", "Indicatrice bocagère"],
+    habitat: "Bocages, grottes et vieux bâtiments", frequency_range: "69–83 kHz (fond. ~4–6 kHz audible)",
+    conservation: "Quasi menacée (NT) en France",
+    profile: { low: 20, mid: 50, high: 160, ultraHigh: 130, pulsesPerMin: 200 }
+  },
+  {
+    species: "Petit Rhinolophe", latin: "Rhinolophus hipposideros",
+    description: "Le plus petit rhinolophe d'Europe. Il chasse dans les sous-bois denses avec un vol très lent et papillonnant. Très sensible aux perturbations de son habitat.",
+    characteristics: ["Plus petit rhinolophe", "Vol très lent", "Sensible aux pesticides"],
+    habitat: "Forêts, haies et grottes", frequency_range: "105–115 kHz (harmoniques ~5–7 kHz audibles)",
+    conservation: "Vulnérable (VU) en France",
+    profile: { low: 15, mid: 40, high: 140, ultraHigh: 160, pulsesPerMin: 220 }
+  },
+  {
+    species: "Murin à oreilles échancrées", latin: "Myotis emarginatus",
+    description: "Espèce thermophile chassant dans les forêts et les vergers. Elle se suspend souvent par une patte pour se toiletter. Ses cris balayent une large plage de fréquences.",
+    characteristics: ["Thermophile", "Oreilles échancrées distinctives", "Chasse en forêt"],
+    habitat: "Forêts thermophiles et grottes", frequency_range: "35–115 kHz (fond. ~3–6 kHz audible)",
+    conservation: "Vulnérable (VU) en France",
+    profile: { low: 30, mid: 75, high: 110, ultraHigh: 70, pulsesPerMin: 90 }
+  },
+  {
+    species: "Murin de Bechstein", latin: "Myotis bechsteinii",
+    description: "L'une des chauves-souris les plus rares d'Europe. Elle vit exclusivement dans les vieilles forêts de feuillus avec de nombreux arbres à cavités. Cris très discrets.",
+    characteristics: ["Très rare", "Forestière stricte", "Longues oreilles"],
+    habitat: "Vieilles forêts de feuillus", frequency_range: "35–55 kHz (fond. ~2–4 kHz audible)",
+    conservation: "Vulnérable (VU) — espèce prioritaire",
+    profile: { low: 12, mid: 35, high: 80, ultraHigh: 55, pulsesPerMin: 35 }
+  },
+  {
+    species: "Barbastelle", latin: "Barbastella barbastellus",
+    description: "Spécialiste des papillons nocturnes. Ses cris sont très faibles pour éviter d'être détectée par ses proies. Elle affectionne les forêts de montagne et les vieux arbres.",
+    characteristics: ["Chasseuse de papillons", "Cris très faibles", "Forêts de montagne"],
+    habitat: "Forêts de montagne et ripisylves", frequency_range: "30–40 kHz (fond. très faible)",
+    conservation: "Vulnérable (VU) en France",
+    profile: { low: 5, mid: 15, high: 35, ultraHigh: 30, pulsesPerMin: 20 }
+  },
+  {
+    species: "Pipistrelle de Kuhl", latin: "Pipistrellus kuhlii",
+    description: "Chauve-souris du pourtour méditerranéen en expansion vers le nord. Très adaptée au milieu urbain, elle se gîte dans les fissures des bâtiments modernes.",
+    characteristics: ["En expansion vers le nord", "Bord blanc des ailes", "Urbaine méditerranéenne"],
+    habitat: "Villes et villages méditerranéens", frequency_range: "35–40 kHz (fond. ~3–4 kHz audible)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 28, mid: 95, high: 105, ultraHigh: 65, pulsesPerMin: 160 }
+  },
+  {
+    species: "Vespère de Savi", latin: "Hypsugo savii",
+    description: "Espèce de montagne et des falaises méditerranéennes. Elle chasse haut dans les airs comme la noctule, mais avec des cris différents. Peu étudiée en France.",
+    characteristics: ["Espèce de falaises", "Vol en altitude", "Méditerranéo-montagnarde"],
+    habitat: "Falaises et zones montagneuses", frequency_range: "35–45 kHz (fond. ~2–4 kHz audible)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 50, mid: 95, high: 75, ultraHigh: 40, pulsesPerMin: 80 }
+  },
+  {
+    species: "Molosse de Cestoni", latin: "Tadarida teniotis",
+    description: "La plus grande chauve-souris de France, aux cris audibles à l'oreille humaine ! Elle chasse très haut dans le ciel le long des falaises et des grandes falaises urbaines.",
+    characteristics: ["Cris audibles par l'humain !", "Grande taille", "Vol très haut"],
+    habitat: "Falaises et grands bâtiments", frequency_range: "10–15 kHz (partiellement audible !)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 160, mid: 130, high: 20, ultraHigh: 5, pulsesPerMin: 40 }
+  },
+  {
+    species: "Murin de Natterer", latin: "Myotis nattereri",
+    description: "Spécialiste du glanage d'insectes sur la végétation et les surfaces. Ses cris très larges bande lui permettent de localiser ses proies avec précision. Présente toute l'année.",
+    characteristics: ["Glaneur de surface", "Très large bande de fréquences", "Oreilles et pattes larges"],
+    habitat: "Forêts mixtes et zones humides", frequency_range: "20–115 kHz (fond. ~2–5 kHz audible)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 22, mid: 65, high: 115, ultraHigh: 85, pulsesPerMin: 55 }
+  },
+  {
+    species: "Grand Rhinolophe", latin: "Rhinolophus ferrumequinum",
+    description: "Indicateur écologique des paysages bocagers. Elle émet une note pure prolongée pour détecter le mouvement de ses proies. Hibernation dans les grottes et caves.",
+    characteristics: ["Note pure prolongée", "Indicateur bocager", "Hibernation en grotte"],
+    habitat: "Bocages, caves et galeries", frequency_range: "69–83 kHz (harmoniques ~4–6 kHz)",
+    conservation: "Quasi menacée (NT)",
+    profile: { low: 18, mid: 45, high: 155, ultraHigh: 125, pulsesPerMin: 190 }
+  },
+  {
+    species: "Murin à moustaches", latin: "Myotis mystacinus",
+    description: "Petite chauve-souris forestière très commune mais discrète. Elle chasse à mi-hauteur dans les lisières et les haies. Souvent confondue avec le Murin de Brandt.",
+    characteristics: ["Petite taille", "Moustaches caractéristiques", "Chasse en lisière"],
+    habitat: "Lisières, haies et villages", frequency_range: "32–85 kHz (fond. ~2–5 kHz audible)",
+    conservation: "Préoccupation mineure (LC)",
+    profile: { low: 20, mid: 60, high: 100, ultraHigh: 65, pulsesPerMin: 100 }
+  }
+];
+
+// ─── MOTEUR DE COMPARAISON LOCAL ────────────────────────────────────────────
+function matchSpecies(measured) {
+  // Normalise les mesures dans [0, 255]
+  const m = {
+    low: Math.min(255, measured.low),
+    mid: Math.min(255, measured.mid),
+    high: Math.min(255, measured.high),
+    ultraHigh: Math.min(255, measured.ultraHigh),
+    pulsesPerMin: Math.min(300, measured.pulsesPerMin)
+  };
+
+  const scores = BAT_DB.map(bat => {
+    const p = bat.profile;
+    // Distance euclidienne pondérée (mid/high plus discriminants)
+    const dist = Math.sqrt(
+      Math.pow((m.low      - p.low)      * 0.8, 2) +
+      Math.pow((m.mid      - p.mid)      * 1.5, 2) +
+      Math.pow((m.high     - p.high)     * 1.5, 2) +
+      Math.pow((m.ultraHigh- p.ultraHigh)* 1.2, 2) +
+      Math.pow((m.pulsesPerMin - p.pulsesPerMin) * 0.6, 2)
+    );
+    return { bat, dist };
+  });
+
+  scores.sort((a, b) => a.dist - b.dist);
+
+  // Convertit la distance en score de confiance
+  const best = scores[0];
+  const maxDist = 400;
+  const confidenceRaw = Math.max(5, Math.round((1 - best.dist / maxDist) * 100));
+  const confidence = confidenceRaw >= 60 ? 'Modérée' : 'Faible';
+
+  return {
+    best: best.bat,
+    confidencePercent: confidenceRaw,
+    confidence,
+    top3: scores.slice(0, 3).map(s => ({ name: s.bat.species, dist: Math.round(s.dist) }))
+  };
+}
+
+function saveApiKey() {} // conservé pour compatibilité
+
+window.addEventListener('load', () => {});
+
+function analyzeRecording() {
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Analyse en cours…';
+
+  document.getElementById('resultContent').innerHTML = `
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+  `;
+
+  // Calcul des impulsions par minute
+  const pulsesPerMin = seconds > 0 ? Math.round((pulseCount / seconds) * 60) : 0;
+
+  const measured = {
+    low: freakData.low,
+    mid: freakData.mid,
+    high: freakData.high,
+    ultraHigh: freakData.ultraHigh,
+    pulsesPerMin
+  };
+
+  // Légère pause visuelle pour que le loader soit visible
+  setTimeout(() => {
+    const { best, confidencePercent, confidence, top3 } = matchSpecies(measured);
+
+    const result = {
+      species: best.species,
+      latin: best.latin,
+      confidence,
+      confidencePercent,
+      description: best.description,
+      characteristics: best.characteristics,
+      habitat: best.habitat,
+      frequency_range: best.frequency_range,
+      conservation: best.conservation,
+      top3
+    };
+
+    displayResult(result);
+    addToHistory(result);
+
+    btn.disabled = false;
+    btn.textContent = '🔍 Identifier l\'espèce';
+  }, 600);
+}
+
+function displayResult(r) {
+  const top3Html = r.top3 ? `
+    <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border);">
+      <div class="card-label" style="margin-bottom:0.5rem;">Autres candidats</div>
+      ${r.top3.slice(1).map(c => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.35rem 0; font-size:0.8rem; color:var(--muted);">
+          <span>🦇 ${c.name}</span>
+          <span style="font-family:'Space Mono',monospace; font-size:0.65rem;">score dist. ${c.dist}</span>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  document.getElementById('resultContent').innerHTML = `
+    <div class="species-result">
+      <div class="species-header">
+        <div>
+          <div class="species-name">🦇 ${r.species}</div>
+          <div class="species-latin">${r.latin}</div>
+        </div>
+        <div class="confidence-badge">${r.confidence} · ${r.confidencePercent}%</div>
+      </div>
+      <p class="species-description">${r.description}</p>
+      <div class="species-tags">
+        ${r.characteristics.map(c => `<span class="tag">${c}</span>`).join('')}
+        <span class="tag">📡 ${r.frequency_range}</span>
+        <span class="tag">🏕️ ${r.habitat}</span>
+        <span class="tag">🌿 ${r.conservation}</span>
+      </div>
+      ${top3Html}
+    </div>
+  `;
+}
+
+function addToHistory(r) {
+  const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  history.unshift({ name: r.species, latin: r.latin, time: now, confidence: r.confidencePercent });
+  if (history.length > 5) history.pop();
+
+  const section = document.getElementById('historySection');
+  section.style.display = 'block';
+
+  document.getElementById('historyList').innerHTML = history.map(h => `
+    <div class="history-item">
+      <div>
+        <div class="history-name">🦇 ${h.name}</div>
+        <div class="history-time" style="margin-top:0.2rem; font-style:italic;">${h.latin}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="history-time">${h.time}</div>
+        <div style="color:var(--accent2); font-family:'Space Mono',monospace; font-size:0.7rem;">${h.confidence}%</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function clearHistory() {
+  history = [];
+  document.getElementById('historySection').style.display = 'none';
+}
+
+function retryMic() {
+  document.getElementById('permBanner').classList.remove('visible');
+  toggleRecording();
+}
+
+function copyFlag() {
+  navigator.clipboard.writeText('chrome://flags/#unsafely-treat-insecure-origin-as-secure')
+    .then(() => {
+      const btn = event.target;
+      btn.textContent = '✅ Copié !';
+      setTimeout(() => btn.textContent = '📋 Copier', 2000);
+    })
+    .catch(() => {
+      const el = document.getElementById('flagUrl');
+      const range = document.createRange();
+      range.selectNode(el);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+    });
+}
+</script>
+</body>
+</html>
